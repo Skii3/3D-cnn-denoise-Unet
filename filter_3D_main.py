@@ -7,13 +7,35 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import time
 import math
+import os
 import scipy
 import random
 from show_data import kernelshow
 #------------------ global settings ------------------#
 REL_FILE_PATH = './plutdata'
+if not os.path.exists(REL_FILE_PATH):
+    os.mkdir(REL_FILE_PATH)
 TRAINDATA_SAVE_PATH = './traindata_save'
+if not os.path.exists(TRAINDATA_SAVE_PATH):
+    os.mkdir(TRAINDATA_SAVE_PATH)
 SAVEPSNR = './savepsnr'
+if not os.path.exists(SAVEPSNR):
+    os.mkdir(SAVEPSNR)
+TRAIN_RESULT_SAVE_PATH = './train_result'
+if not os.path.exists(TRAIN_RESULT_SAVE_PATH):
+    os.mkdir(TRAIN_RESULT_SAVE_PATH)
+MODEL_PATH = './model_save'
+if not os.path.exists(MODEL_PATH):
+    os.mkdir(MODEL_PATH)
+TEST_RESULT_SAVE_PATH = './test_result'
+if not os.path.exists(TEST_RESULT_SAVE_PATH):
+    os.mkdir(TEST_RESULT_SAVE_PATH)
+TRAIN_DATA_STEP = './train_data_step'
+if not os.path.exists(TRAIN_DATA_STEP):
+    os.mkdir(TRAIN_DATA_STEP)
+LOG_PATH = './log'
+if not os.path.exists(LOG_PATH):
+    os.mkdir(LOG_PATH)
 ind1 = random.randint(0,99)
 ind2 = random.randint(0,15)
 start_point = [ind1,ind1,ind2]
@@ -28,7 +50,7 @@ bn_select = 2
 batch_size = 40
 kernel_size = 3
 n_kernel = 6
-num_filter = 16
+num_filter = 64
 prelu = True
 # train/test/onetest/show_kernel
 mode = 'train'
@@ -85,7 +107,7 @@ if mode == 'train':
 
         saver = tf.train.Saver()
         merged = tf.summary.merge_all(key='summaries')
-        train_writer = tf.summary.FileWriter('./log',sess.graph)
+        train_writer = tf.summary.FileWriter(LOG_PATH,sess.graph)
         sess.run(tf.global_variables_initializer())
 
         g = tf.get_default_graph()
@@ -125,7 +147,7 @@ if mode == 'train':
                         else:
                             temp = np.concatenate((temp1.squeeze(),temp2.squeeze(),temp3.squeeze(),temp4.squeeze()),axis=1)
                             result = np.concatenate((result,temp),axis=0)
-                scipy.misc.imsave('./train_result' + '/denoise_noisedata_label_noise%d.png' % epoch, result)
+                scipy.misc.imsave(TRAIN_RESULT_SAVE_PATH + '/denoise_noisedata_label_noise%d.png' % epoch, result)
 
             epoch_time = time.time()
             ind = np.arange(np.shape(data_epoch)[0])
@@ -159,7 +181,7 @@ if mode == 'train':
                      time.time()-epoch_time,sum_all_loss/n_iter,sum_tvDiff_loss/n_iter,sum_L1_loss/n_iter,sum_snr/n_iter)
 
             if (epoch+1) % 100 == 0:
-                tf.train.Saver().save(sess, './model_save' + '/model%d' % epoch)
+                tf.train.Saver().save(sess,  MODEL_PATH + '/model%d' % epoch)
 
 elif mode == 'test':
     data = np.expand_dims(test_data,4)
@@ -232,7 +254,7 @@ elif mode == 'onetest':
             onedata_test_extract.append(temp_noise)
 
     sess = tf.Session()
-    ckpt = tf.train.get_checkpoint_state('./model_save/')
+    ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
     print ckpt
     tf.train.Saver().restore(sess, ckpt.model_checkpoint_path)
     onedata_test_extract = np.expand_dims(onedata_test_extract,axis=4)
@@ -284,15 +306,15 @@ elif mode == 'onetest':
     plt.title('noisedata')
 
     for i in range(np.shape(onedata_test)[2]):
-        scipy.misc.imsave('./test_result' + '/%dlabel.png'%i, onedata_test[:,:,i])
-        scipy.misc.imsave('./test_result' + '/%dmdenoised.png'%i, denoise_onedata[:,:,i])
-        scipy.misc.imsave('./test_result' + '/%dnoisedata.png'%i, onedata_test_noise[:, :, i])
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%dlabel.png'%i, onedata_test[:,:,i])
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%dmdenoised.png'%i, denoise_onedata[:,:,i])
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%dnoisedata.png'%i, onedata_test_noise[:, :, i])
 
     print 'ok'
 elif mode == 'show_kernel':
     CNNclass.build_model2(input, target, True,bn_select)
     sess = tf.Session()
-    ckpt = tf.train.get_checkpoint_state('./model_save/')
+    ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
     tf.train.Saver().restore(sess, ckpt.model_checkpoint_path)
     g = tf.get_default_graph()
 
