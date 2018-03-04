@@ -41,21 +41,24 @@ ind2 = random.randint(0,15)
 start_point = [ind1,ind1,ind2]
 end_point = [876,900,100]
 stride = [80,80,10]
-max_epochs = 200
+max_epochs = 500
 step_decay = 1000
 decay_rate = 0.5
-lr = 1e-9
+lr = 1e-3
 beta1 = 0.5
 bn_select = 2
-batch_size = 40
+batch_size = 20
 kernel_size = 3
 n_kernel = 6
 num_filter = 64
 prelu = True
-# train/test/onetest/show_kernel
-mode = 'train'
+# train/test/onetest/show_kernel/onetest2
+mode = 'onetest'
 if mode == 'train':
-    patch_size = [40, 40, 40]
+    patch_size = [64, 64, 64]
+elif mode == 'onetest2':
+    patch_size = [800, 800, 8]
+    batch_size = 1
 else:
     patch_size = [200, 200, 100]
     batch_size = 1
@@ -89,7 +92,7 @@ if mode == 'train':
         print "num_filter:", num_filter
         print "kernel_size:", kernel_size
 
-        output, loss, l1_loss, tv_loss, snr,del_snr,output_noise = CNNclass.build_model2(input, target, True,bn_select,prelu)
+        output, loss, l1_loss, tv_loss, snr,del_snr,output_noise = CNNclass.build_model(input, target, True,bn_select,prelu)
 
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(lr, global_step,
@@ -113,7 +116,7 @@ if mode == 'train':
         g = tf.get_default_graph()
         print("---------------------------training model---------------------------")
         for epoch in range(0, max_epochs + 1):
-            if (epoch) % 20 == 0:
+            if (epoch) % 40 == 0:
                 ind1 = random.randint(0, 99)
                 ind2 = random.randint(0, 15)
                 start_point = [ind1, ind1, ind2]
@@ -126,16 +129,16 @@ if mode == 'train':
                                                             traindata_save=TRAINDATA_SAVE_PATH)
                 data_epoch = np.expand_dims(data_epoch, axis=4)
                 data_label_epoch = np.expand_dims(data_label_epoch, axis=4)
-            if (epoch) % 20 == 0:
-                kernelshow(g, n_kernel, sess, epoch, bn_select)
+            #if (epoch) % 20 == 0:
+                #kernelshow(g, n_kernel, sess, epoch, bn_select)
             if (epoch) % 1 == 0:
                 ind = np.arange(np.shape(data_epoch)[0])
                 ind = np.random.permutation(ind)
-                data_test = data_epoch[ind[:2],:,:,:,:]
-                data_label_test = data_label_epoch[ind[:2],:,:,:,:]
+                data_test = data_epoch[ind[:batch_size],:,:,:,:]
+                data_label_test = data_label_epoch[ind[:batch_size],:,:,:,:]
                 denoise_test,summary,noise_test = sess.run([output, merged, output_noise],feed_dict={input:data_test, target:data_label_test})
                 train_writer.add_summary(summary,epoch)
-                for j in range(np.shape(data_test)[0]):
+                for j in range(2):
                     for i in range(4):
                         indd = random.randint(0,np.shape(data_test)[3]-1)
                         temp1 = denoise_test[j,:,:,indd,0]
@@ -206,8 +209,7 @@ elif mode == 'test':
         plt.imshow(temp3[:, j, :].reshape(256, 256), cmap='gray')
         plt.show()
 elif mode == 'onetest':
-
-    output,_,_,_,_,_,_ = CNNclass.build_model2(input, target, True,bn_select,prelu)
+    output,_,_,_,_,_,_ = CNNclass.build_model(input, target, True,bn_select,prelu)
 
     _, _, test_data = load_data(rel_file_path=REL_FILE_PATH,
                                 start_point=start_point,
@@ -311,8 +313,46 @@ elif mode == 'onetest':
         scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%dnoisedata.png'%i, onedata_test_noise[:, :, i])
 
     print 'ok'
+elif mode == 'onetest2':
+    output, _, _, _, _, _, _ = CNNclass.build_model(input, target, True, bn_select, prelu)
+    _, _, test_data = load_data(rel_file_path=REL_FILE_PATH,
+                                start_point=start_point,
+                                end_point=end_point,
+                                patch_size=patch_size,
+                                stride=stride,
+                                traindata_save=TRAINDATA_SAVE_PATH)
+
+    onedata = np.concatenate((test_data[0, :, :, :], test_data[1, :, :, :]), axis=2)  # 876*900*160
+    onedata_test = onedata[:patch_size[0], :patch_size[1], :patch_size[2]]
+
+    # normalize to [0,1]
+    max_train_temp = np.max(onedata_test)
+    min_train_temp = np.min(onedata_test)
+    onedata_test = (onedata_test - min_train_temp) / (max_train_temp - min_train_temp)
+
+    std_train_temp = np.mean(onedata_test)
+
+    noise_level = random.randint(0, 5) * 1e-2
+    onedata_test_noise = np.random.normal(0, noise_level * std_train_temp, onedata_test.shape) + onedata_test
+
+    onedata_test_noise = np.reshape(onedata_test_noise,
+                                    [1, np.shape(onedata_test_noise)[0], np.shape(onedata_test_noise)[1],
+                                     np.shape(onedata_test_noise)[2], 1])
+
+    sess = tf.Session()
+    ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
+    print ckpt
+    tf.train.Saver().restore(sess, ckpt.model_checkpoint_path)
+    denoised = sess.run(output, feed_dict={input:onedata_test_noise})
+    for i in range(patch_size[2]):
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2flabel.png' % (i, noise_level), onedata_test[:, :, i])
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2fmdenoise.png' % (i, noise_level),
+                          np.squeeze(denoised[:, :, :, i, 0]))
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2fnoisedata.png' % (i, noise_level),
+                          np.squeeze(onedata_test_noise[:, :, :, i, 0]))
+
 elif mode == 'show_kernel':
-    CNNclass.build_model2(input, target, True,bn_select)
+    CNNclass.build_model(input, target, True,bn_select)
     sess = tf.Session()
     ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
     tf.train.Saver().restore(sess, ckpt.model_checkpoint_path)

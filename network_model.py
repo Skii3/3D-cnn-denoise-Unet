@@ -27,66 +27,69 @@ class unet_3d_model(object):
     def build_model(self,input, target, is_training,bn_select,prelu):
         with tf.variable_scope('net', reuse=False) as vs:
             # ---------------------------------conv-------------------------------------------
-            conv = self.conv3d(input,self.kernel_size,self.in_channel,self.num_filter,'conv1')
+            conv1 = self.conv3d(input,self.kernel_size,self.in_channel,self.num_filter,'conv1')
+            conv1 = self.maxpool3d(conv1)
             if prelu == True:
-                relu = self.prelu(conv,'relu1')
+                relu1 = self.prelu(conv1,'relu1')
             else:
-                relu = tf.nn.relu(conv)
+                relu1 = tf.nn.relu(conv1)
 
-            conv = self.conv3d(relu, self.kernel_size, self.num_filter, self.num_filter * 2, 'conv2')
+            conv2 = self.conv3d(relu1, self.kernel_size, self.num_filter, self.num_filter * 2, 'conv2')
+            conv2 = self.maxpool3d(conv2)
             if bn_select == 1:
-                bn = self.batchnorm(conv, 'bn2')
+                bn2 = self.batchnorm(conv2, 'bn2')
             elif bn_select == 2:
-                bn = self.bn(conv, is_training, 'bn2')
+                bn2 = self.bn(conv2, is_training, 'bn2')
             else:
-                bn = conv
+                bn2 = conv2
             if prelu == True:
-                relu = self.prelu(bn,'relu2')
+                relu2 = self.prelu(bn2,'relu2')
             else:
-                relu = tf.nn.relu(bn)
+                relu2 = tf.nn.relu(bn2)
 
-            conv = self.conv3d(relu, self.kernel_size, self.num_filter * 2, self.num_filter * 4, 'conv3')
+            conv3 = self.conv3d(relu2, self.kernel_size, self.num_filter * 2, self.num_filter * 4, 'conv3')
+            conv3 = self.maxpool3d(conv3)
             if bn_select == 1:
-                bn = self.batchnorm(conv, 'bn3')
+                bn3 = self.batchnorm(conv3, 'bn3')
             elif bn_select == 2:
-                bn = self.bn(conv, is_training, 'bn3')
+                bn3 = self.bn(conv3, is_training, 'bn3')
             else:
-                bn = conv
+                bn3 = conv3
             if prelu == True:
-                relu = self.prelu(bn, 'relu3')
+                relu3 = self.prelu(bn3, 'relu3')
             else:
-                relu = tf.nn.relu(bn)
+                relu3 = tf.nn.relu(bn3)
 
             # ---------------------------------deconv-------------------------------------------
-            conv = self.deconv3d(relu, self.kernel_size, self.num_filter * 2, 'conv4')
+            conv4 = self.deconv3d(relu3, self.kernel_size, self.num_filter * 2,self.batch_size, 'conv4',conv2)
             if bn_select == 1:
-                bn = self.batchnorm(conv, 'bn4')
+                bn4 = self.batchnorm(conv4, 'bn4')
             elif bn_select == 2:
-                bn = self.bn(conv, is_training, 'bn4')
+                bn4 = self.bn(conv4, is_training, 'bn4')
             else:
-                bn = conv
+                bn4 = conv4
             if prelu == True:
-                relu = self.prelu(bn, 'relu4')
+                relu4 = self.prelu(tf.concat([bn4,conv2],axis=4), 'relu4')
             else:
-                relu = tf.nn.relu(bn)
+                relu4 = tf.nn.relu(tf.concat([bn4,conv2],axis=4))
 
-            conv = self.deconv3d(relu, self.kernel_size, self.num_filter, 'conv5')
+            conv5 = self.deconv3d(relu4, self.kernel_size, self.num_filter,self.batch_size, 'conv5',conv1)
             if bn_select == 1:
-                bn = self.batchnorm(conv, 'bn5')
+                bn5 = self.batchnorm(conv5, 'bn5')
             elif bn_select == 2:
-                bn = self.bn(conv, is_training, 'bn5')
+                bn5 = self.bn(conv5, is_training, 'bn5')
             else:
-                bn = conv
+                bn5 = conv5
             if prelu == True:
-                relu = self.prelu(bn, 'relu5')
+                relu5 = self.prelu(tf.concat([bn5,conv1],axis=4), 'relu5')
             else:
-                relu = tf.nn.relu(bn)
+                relu5 = tf.nn.relu(tf.concat([bn5,conv1],axis=4))
 
-            output_noise = self.deconv3d(relu,self.kernel_size,self.in_channel,'conv6')
+            output_noise = self.deconv3d(relu5,self.kernel_size,self.in_channel,self.batch_size,'conv6',input)
             output = input - output_noise
 
-            L1_loss_forward = tf.reduce_sum(tf.abs(output - target))
-            L2_loss_forward = tf.reduce_sum(tf.square(output - target))
+            L1_loss_forward = tf.reduce_mean(tf.abs(output - target))
+            L2_loss_forward = tf.reduce_mean(tf.square(output - target))
             pixel_num = self.input_size[0] * self.input_size[1]
             #output_flatten = tf.reduce_sum(output,axis=3)
             #tvDiff_loss_forward = \
@@ -115,16 +118,16 @@ class unet_3d_model(object):
                     tvDiff_loss_forward = tvDiff_loss_forward + \
                                           tf.reduce_mean(tf.image.total_variation(output[:,i,:,:,:])) / pixel_num * tv_lambda / 10000
 
-            tvDiff_loss_forward = tvDiff_loss_forward * pixel_num # / self.input_size[2] / self.input_size[1] / self.input_size[0]
+            tvDiff_loss_forward = tvDiff_loss_forward / self.input_size[2] / self.input_size[1] / self.input_size[0]
             loss = L1_loss_forward + tvDiff_loss_forward
-            loss2 =  L2_loss_forward + tvDiff_loss_forward
+            loss2 = L2_loss_forward + tvDiff_loss_forward
             del_snr, snr = self.snr(input,output,target)
             with tf.name_scope('summaries'):
                 tf.summary.scalar('all loss', loss)
                 tf.summary.scalar('L1_loss',L1_loss_forward)
                 tf.summary.scalar('tv_loss',tvDiff_loss_forward)
                 tf.summary.scalar('snr',snr)
-            return output,loss,L1_loss_forward,tvDiff_loss_forward,snr,del_snr,output_noise
+            return output,loss2,L1_loss_forward,tvDiff_loss_forward,snr,del_snr,output_noise
 
     def batchnorm(self,input, name):
         with tf.variable_scope(name):
@@ -188,19 +191,20 @@ class unet_3d_model(object):
                                      dtype=tf.float32, initializer=tf.random_normal_initializer(0,0.05),
                                      trainable=True)
             self.variable_summaries(kernel)
-            conv = tf.nn.conv3d(x,kernel,strides=[1,2,2,2,1],padding="SAME")
+            conv = tf.nn.conv3d(x,kernel,strides=[1,1,1,1,1],padding="SAME")
             return conv
 
-    def deconv3d(self,x,k,out_channels,name):
+    def deconv3d(self,x,k,out_channels,batch_size,name,x2):
         with tf.variable_scope(name):
-            batch_size, in_width, in_height, in_depth, in_channels = [int(d) for d in x.get_shape()]
-            kernel = tf.get_variable('kernel',[k,k,k,in_channels,out_channels],
+            in_width, in_height, in_depth, in_channels = [int(d) for d in x.get_shape()[1:]]
+            in_width2, in_height2, in_depth2, in_channels2 = [int(d) for d in x2.get_shape()[1:]]
+            kernel = tf.get_variable('kernel',[k,k,k,out_channels,in_channels],
                                      dtype=tf.float32, initializer=tf.random_normal_initializer(0,0.05),
                                      trainable=True)
             self.variable_summaries(kernel)
             deconv = tf.nn.conv3d_transpose(x,
                                             kernel,
-                                            [batch_size,in_width*2,in_height*2,in_depth*2,out_channels],
+                                            [batch_size,in_width2,in_height2,in_depth2,out_channels],
                                             strides=[1,2,2,2,1],
                                             padding="SAME")
             return deconv

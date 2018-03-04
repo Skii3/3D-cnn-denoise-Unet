@@ -2,8 +2,11 @@
 import numpy as np
 import scipy
 import math
+import os
 
-
+KERNEL_SAVE_PATH = './kernel_save'
+if not os.path.exists(KERNEL_SAVE_PATH):
+    os.mkdir(KERNEL_SAVE_PATH)
 def kernelshow(g,n_kernel,sess,epoch,bn_select):
     kernel_all = []
     prefix = 'net/'
@@ -74,7 +77,7 @@ def kernelshow(g,n_kernel,sess,epoch,bn_select):
             for jj in range(np.shape(temp_4)[1]):
                 kernel_show[ii * scale:(ii + 1) * scale, jj * scale:(jj + 1) * scale] = temp_4[ii, jj]
 
-        scipy.misc.imsave('./kernel_save' + '/%dkernel_%diter.png' % (k, epoch), kernel_show)
+        scipy.misc.imsave(KERNEL_SAVE_PATH + '/%dkernel_%diter.png' % (k, epoch), kernel_show)
 
     if bn_select != 0:
         beta_all = []
