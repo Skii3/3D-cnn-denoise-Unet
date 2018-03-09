@@ -41,23 +41,24 @@ ind2 = random.randint(0,15)
 start_point = [ind1,ind1,ind2]
 end_point = [876,900,100]
 stride = [80,80,10]
-max_epochs = 500
+max_epochs = 1000
 step_decay = 1000
 decay_rate = 0.5
-lr = 1e-3
+lr = 1e-4
 beta1 = 0.5
 bn_select = 2
-batch_size = 20
+batch_size = 10
 kernel_size = 3
 n_kernel = 6
-num_filter = 64
+num_filter = 96
 prelu = True
-# train/test/onetest/show_kernel/onetest2
-mode = 'onetest'
+model_load = False
+# train/test/onetest/show_kernel/onetest2/onetest_all_noise_level
+mode = 'train'
 if mode == 'train':
     patch_size = [64, 64, 64]
-elif mode == 'onetest2':
-    patch_size = [800, 800, 8]
+elif mode == 'onetest2' or mode == 'onetest_all_noise_level':
+    patch_size = [876, 900, 4]
     batch_size = 1
 else:
     patch_size = [200, 200, 100]
@@ -100,9 +101,9 @@ if mode == 'train':
         train_vars = tf.trainable_variables()
         vars_forward = [var for var in train_vars if 'net' in var.name]
 
-        #optim_forward = tf.train.AdamOptimizer(learning_rate=lr,beta1=beta1).minimize(loss)
+        optim_forward = tf.train.AdamOptimizer(learning_rate=lr,beta1=beta1).minimize(loss)
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-        optim_forward = optimizer.minimize(loss, global_step=global_step,var_list=vars_forward)
+        #optim_forward = optimizer.minimize(loss, global_step=global_step,var_list=vars_forward)
 
         with tf.name_scope('summaries'):
             tf.summary.scalar('learning rate',learning_rate)
@@ -111,12 +112,16 @@ if mode == 'train':
         saver = tf.train.Saver()
         merged = tf.summary.merge_all(key='summaries')
         train_writer = tf.summary.FileWriter(LOG_PATH,sess.graph)
-        sess.run(tf.global_variables_initializer())
-
+        if model_load == True:
+            ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
+            print ckpt
+            tf.train.Saver().restore(sess, ckpt.model_checkpoint_path)
+        else:
+            sess.run(tf.global_variables_initializer())
         g = tf.get_default_graph()
         print("---------------------------training model---------------------------")
         for epoch in range(0, max_epochs + 1):
-            if (epoch) % 40 == 0:
+            if (epoch) % 5 == 0:
                 ind1 = random.randint(0, 99)
                 ind2 = random.randint(0, 15)
                 start_point = [ind1, ind1, ind2]
@@ -361,6 +366,52 @@ elif mode == 'show_kernel':
     kernelshow(g, n_kernel, sess,1,bn_select)
 
     print 'ok'
+elif mode == 'onetest_all_noise_level':
+    output, _, _, _, snr, _, _,in_snr = CNNclass.build_model(input, target, True, bn_select)
+    _, _, test_data = load_data(rel_file_path=REL_FILE_PATH,
+                                start_point=start_point,
+                                end_point=end_point,
+                                patch_size=patch_size,
+                                stride=stride,
+                                traindata_save=TRAINDATA_SAVE_PATH)
+
+    onedata = np.concatenate((test_data[0, :, :, :], test_data[1, :, :, :]), axis=2)  # 876*900*160
+    onedata_test = onedata[:patch_size[0], :patch_size[1], :patch_size[2]]
+    onedata_test = (onedata_test - np.mean(onedata_test)) / np.std(onedata_test)
+
+    onedata_test = np.reshape(onedata_test,
+                                [1, np.shape(onedata_test)[0], np.shape(onedata_test)[1],
+                                 np.shape(onedata_test)[2], 1])
+    ref = np.max(onedata_test)
+    sess = tf.Session()
+    ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
+    print ckpt
+    tf.train.Saver().restore(sess, ckpt.model_checkpoint_path)
+    output_snr_sum = 0
+    input_snr_sum = 0
+    del_snr_sum = 0
+    noise_num = 30
+    for noise_level in range(1,noise_num+1,1):
+        onedata_test_noise = np.random.normal(0, noise_level * 1e-2 * ref, onedata_test.shape) + onedata_test
+
+        denoised,_,_ = sess.run([output,snr,in_snr], feed_dict={input: onedata_test_noise, target: onedata_test})
+        i = 0
+        denoised_one = np.squeeze(denoised[:, :, :, i, 0])
+        noise_one = np.squeeze(onedata_test_noise[:, :, :, i, 0])
+        target_one = np.squeeze(onedata_test[0,:, :, i,0])
+
+        tmp_snr0 = np.sum(np.square(np.abs(target_one))) / np.sum(np.square(np.abs(target_one - noise_one)))
+        input_snr = 10.0 * np.log(tmp_snr0) / np.log(10.0)  # 输入图片的snr
+
+        tmp_snr0 = np.sum(np.square(np.abs(target_one))) / np.sum(np.square(np.abs(target_one - denoised_one)))
+        output_snr = 10.0 * np.log(tmp_snr0) / np.log(10.0)  # 输入图片的snr
+
+        print 'noise level: %.2f, input_snr: %.4f, output_snr: %.4f, del_snr: %.4f' %(noise_level,input_snr,output_snr,output_snr-input_snr)
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2flabel.png' % (i, noise_level), np.squeeze(onedata_test[0,:, :, i,0]))
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2fmdenoise.png' % (i, noise_level),
+                          np.squeeze(denoised[:, :, :, i, 0]))
+        scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2fnoisedata.png' % (i, noise_level),
+                          np.squeeze(onedata_test_noise[:, :, :, i, 0]))
 
 
 

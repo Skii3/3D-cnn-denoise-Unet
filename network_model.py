@@ -85,8 +85,8 @@ class unet_3d_model(object):
             else:
                 relu5 = tf.nn.relu(tf.concat([bn5,conv1],axis=4))
 
-            output_noise = self.deconv3d(relu5,self.kernel_size,self.in_channel,self.batch_size,'conv6',input)
-            output = input - output_noise
+            output = self.deconv3d(relu5,self.kernel_size,self.in_channel,self.batch_size,'conv6',input)
+            output_noise = input - output
 
             L1_loss_forward = tf.reduce_mean(tf.abs(output - target))
             L2_loss_forward = tf.reduce_mean(tf.square(output - target))
@@ -95,7 +95,7 @@ class unet_3d_model(object):
             #tvDiff_loss_forward = \
             #    tf.reduce_mean(tf.image.total_variation(output_flatten)) / pixel_num * 200 / 10000
 
-            tv_lambda = 20000
+            tv_lambda = 2000000
             for i in range(self.input_size[2]):
                 if i == 0:
                     tvDiff_loss_forward = \
@@ -127,7 +127,7 @@ class unet_3d_model(object):
                 tf.summary.scalar('L1_loss',L1_loss_forward)
                 tf.summary.scalar('tv_loss',tvDiff_loss_forward)
                 tf.summary.scalar('snr',snr)
-            return output,loss2,L1_loss_forward,tvDiff_loss_forward,snr,del_snr,output_noise
+            return output,loss,L1_loss_forward,tvDiff_loss_forward,snr,del_snr,output_noise
 
     def batchnorm(self,input, name):
         with tf.variable_scope(name):
