@@ -54,7 +54,7 @@ num_filter = 96
 prelu = True
 model_load = False
 # train/test/onetest/show_kernel/onetest2/onetest_all_noise_level
-mode = 'train'
+mode = 'onetest_all_noise_level'
 if mode == 'train':
     patch_size = [64, 64, 64]
 elif mode == 'onetest2' or mode == 'onetest_all_noise_level':
@@ -93,7 +93,7 @@ if mode == 'train':
         print "num_filter:", num_filter
         print "kernel_size:", kernel_size
 
-        output, loss, l1_loss, tv_loss, snr,del_snr,output_noise = CNNclass.build_model(input, target, True,bn_select,prelu)
+        output, loss, l1_loss, tv_loss, snr,del_snr,output_noise,_ = CNNclass.build_model(input, target, True,bn_select,prelu)
 
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(lr, global_step,
@@ -214,7 +214,7 @@ elif mode == 'test':
         plt.imshow(temp3[:, j, :].reshape(256, 256), cmap='gray')
         plt.show()
 elif mode == 'onetest':
-    output,_,_,_,_,_,_ = CNNclass.build_model(input, target, True,bn_select,prelu)
+    output, _, _, _, _, _, _, _ = CNNclass.build_model(input, target, True,bn_select,prelu)
 
     _, _, test_data = load_data(rel_file_path=REL_FILE_PATH,
                                 start_point=start_point,
@@ -319,7 +319,7 @@ elif mode == 'onetest':
 
     print 'ok'
 elif mode == 'onetest2':
-    output, _, _, _, _, _, _ = CNNclass.build_model(input, target, True, bn_select, prelu)
+    output, _, _, _, _, _, _, _ = CNNclass.build_model(input, target, True, bn_select, prelu)
     _, _, test_data = load_data(rel_file_path=REL_FILE_PATH,
                                 start_point=start_point,
                                 end_point=end_point,
@@ -367,7 +367,7 @@ elif mode == 'show_kernel':
 
     print 'ok'
 elif mode == 'onetest_all_noise_level':
-    output, _, _, _, snr, _, _,in_snr = CNNclass.build_model(input, target, True, bn_select)
+    output, _, _, _, snr, _, _,in_snr = CNNclass.build_model(input, target, True, bn_select, prelu)
     _, _, test_data = load_data(rel_file_path=REL_FILE_PATH,
                                 start_point=start_point,
                                 end_point=end_point,

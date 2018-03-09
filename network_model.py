@@ -122,12 +122,13 @@ class unet_3d_model(object):
             loss = L1_loss_forward + tvDiff_loss_forward
             loss2 = L2_loss_forward + tvDiff_loss_forward
             del_snr, snr = self.snr(input,output,target)
+            input_snr = self.input_snr(input, target)
             with tf.name_scope('summaries'):
                 tf.summary.scalar('all loss', loss)
                 tf.summary.scalar('L1_loss',L1_loss_forward)
                 tf.summary.scalar('tv_loss',tvDiff_loss_forward)
                 tf.summary.scalar('snr',snr)
-            return output,loss,L1_loss_forward,tvDiff_loss_forward,snr,del_snr,output_noise
+            return output,loss,L1_loss_forward,tvDiff_loss_forward,snr,del_snr,output_noise,input_snr
 
     def batchnorm(self,input, name):
         with tf.variable_scope(name):
@@ -143,6 +144,11 @@ class unet_3d_model(object):
             normalized = tf.nn.batch_normalization(input, mean, variance, offset, scale,
                                                  variance_epsilon=variance_epsilon)
         return normalized
+
+    def input_snr(self, input, target):
+        tmp_snr0 = tf.reduce_sum(tf.square(tf.abs(target))) / tf.reduce_sum(tf.square(tf.abs(target - input)))
+        out0 = 10.0 * tf.log(tmp_snr0) / tf.log(10.0)  # 输入图片的snr
+        return out0
 
     def bn(self,x,is_training,name):
         with tf.variable_scope(name):
