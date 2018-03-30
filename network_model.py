@@ -85,8 +85,8 @@ class unet_3d_model(object):
             else:
                 relu5 = tf.nn.relu(tf.concat([bn5,conv1],axis=4))
 
-            output = self.deconv3d(relu5,self.kernel_size,self.in_channel,self.batch_size,'conv6',input)
-            output_noise = input - output
+            output_noise = self.deconv3d(relu5,self.kernel_size,self.in_channel,self.batch_size,'conv6',input)
+            output = input - output_noise
 
             L1_loss_forward = tf.reduce_mean(tf.abs(output - target))
             L2_loss_forward = tf.reduce_mean(tf.square(output - target))

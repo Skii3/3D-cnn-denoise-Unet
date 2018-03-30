@@ -6,8 +6,10 @@ from network_model import unet_3d_model
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import time
+import scipy.io as sio
 import math
 import os
+import glob
 import scipy
 import random
 from show_data import kernelshow
@@ -53,12 +55,15 @@ n_kernel = 6
 num_filter = 96
 prelu = True
 model_load = False
-# train/test/onetest/show_kernel/onetest2/onetest_all_noise_level
+# train/test/onetest/show_kernel/onetest2/onetest_all_noise_level/sigsbee_test
 mode = 'onetest_all_noise_level'
 if mode == 'train':
     patch_size = [64, 64, 64]
 elif mode == 'onetest2' or mode == 'onetest_all_noise_level':
     patch_size = [876, 900, 4]
+    batch_size = 1
+elif mode == 'sigsbee_test':
+    patch_size = [1500, 496, 4]
     batch_size = 1
 else:
     patch_size = [200, 200, 100]
@@ -412,7 +417,18 @@ elif mode == 'onetest_all_noise_level':
                           np.squeeze(denoised[:, :, :, i, 0]))
         scipy.misc.imsave(TEST_RESULT_SAVE_PATH + '/%d_%.2fnoisedata.png' % (i, noise_level),
                           np.squeeze(onedata_test_noise[:, :, :, i, 0]))
+elif mode == 'sigsbee_test':
+    files_name = glob.glob('../fx_deconv_result/*.mat')
+    index = 0
+    for file_name in files_name:
+        data = sio.loadmat(file_name)
+        if index == 0:
+            data_data = data['data']
+            index = index + 1
+        elif index == 1:
+            data_data = data['data2']
 
+        # Process data
 
 
 
